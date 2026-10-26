@@ -5,7 +5,9 @@ using System.Media;
 using System.Threading;
 using System.Windows.Forms;
 
-// F9 anti-landmine for merchant purchases (Ctrl+click). While Ctrl is held, the price in the hovered item's
+// F9 anti-landmine for merchant purchases (Ctrl+click). It acts only while a merchant window is open (checked
+// in the background); otherwise clicks pass untouched. Each opening of the window starts a new series.
+// While Ctrl is held, the price in the hovered item's
 // tooltip is read once the cursor stops. The first price read becomes the reference; its first Ctrl+click is
 // blocked so the reference is seen before anything is bought. After that a Ctrl+click passes only when the
 // hovered item's price is known and costs at most MaxRatio times the reference (currencies converted by the
@@ -16,10 +18,13 @@ sealed class AntiLandmine : IDisposable
     const int SettleMs = 50;          // cursor still this long before reading: the tooltip is drawn
     const int AfterClickMs = 150;     // after a purchase the item under the cursor changes; read again after this
     const int MaxSavedMisses = 30;
+    const int MerchantCheckMs = 200;
+    const int MerchantGoneMs = 1000;  // the title can be hidden by a tooltip for a moment; closed only after this
 
     enum Verdict { None, Reference, Ok, Landmine, Unreadable }
 
     readonly PriceReader reader = new PriceReader();
+    readonly MerchantDetector merchant = new MerchantDetector(LoadTemplate());
     readonly OverlayForm form = new OverlayForm();
     readonly Label label;
     readonly Native.LowLevelMouseProc hookProc;
@@ -31,6 +36,7 @@ sealed class AntiLandmine : IDisposable
     volatile bool running;
 
     // Shared between the worker and the hook (UI thread); guarded by gate.
+    bool merchantOpen;
     Verdict verdict;
     Point verdictAt;          // cursor position the verdict belongs to
     long readAfter;           // timestamp before which the worker must not read (cursor settling, after a click)
@@ -39,6 +45,11 @@ sealed class AntiLandmine : IDisposable
     int savedMisses;
 
     public bool Enabled { get; private set; }
+
+    public static Bitmap LoadTemplate()
+    {
+        using (var s = typeof(AntiLandmine).Assembly.GetManifestResourceStream("merchant_tpl.png")) return new Bitmap(s);
+    }
 
     public AntiLandmine()
     {
@@ -54,7 +65,7 @@ sealed class AntiLandmine : IDisposable
         if (Enabled)
         {
             config = Config.Load();
-            lock (gate) { verdict = Verdict.None; reference = null; swallowUp = false; }
+            lock (gate) { verdict = Verdict.None; reference = null; swallowUp = false; merchantOpen = false; }
             savedMisses = 0;
             hook = Native.SetWindowsHookEx(14 /* WH_MOUSE_LL */, hookProc, Native.GetModuleHandle(null), 0);
             running = true;
@@ -83,10 +94,35 @@ sealed class AntiLandmine : IDisposable
         {
             Point last = Point.Empty;
             bool shown = false;
+            long nextMerchantCheck = 0, merchantSeen = 0;
             while (running)
             {
                 Rectangle game;
-                if (!Native.TryGetForegroundGame(out game) || !CtrlDown())
+                if (!Native.TryGetForegroundGame(out game))
+                {
+                    lock (gate) { verdict = Verdict.None; merchantOpen = false; }
+                    if (shown) { UiHide(); shown = false; }
+                    Thread.Sleep(200);
+                    continue;
+                }
+
+                bool ctrl = CtrlDown();
+                // While Ctrl is held the full frame is captured anyway for prices; otherwise only the top half.
+                if (Now() >= nextMerchantCheck && !ctrl)
+                {
+                    nextMerchantCheck = Now() + Ms(MerchantCheckMs);
+                    bool seen = true;
+                    if (config.MerchantOnly)
+                    {
+                        grab.Capture(game.X, game.Y, game.Width, game.Height / 2 + 1);
+                        seen = merchant.Find(grab.Pixels, grab.Width, grab.Height, game.Height);
+                    }
+                    UpdateMerchant(seen, ref merchantSeen);
+                }
+
+                bool open;
+                lock (gate) open = merchantOpen;
+                if (!open || !ctrl)
                 {
                     lock (gate) verdict = Verdict.None;
                     if (shown) { UiHide(); shown = false; }
@@ -108,6 +144,7 @@ sealed class AntiLandmine : IDisposable
                 grab.Capture(game.X, game.Y, game.Width, game.Height);
                 var price = reader.Read(grab.Pixels, grab.Width, 0, 0, grab.Width, grab.Height, game.Height < 1440);
                 double ms = (Now() - t0) * 1000.0 / Stopwatch.Frequency;
+                if (config.MerchantOnly) UpdateMerchant(merchant.Find(grab.Pixels, grab.Width, grab.Height, game.Height), ref merchantSeen);
                 if (Cursor.Position != pos) continue; // moved while reading: the result may belong to another item
 
                 string text; Color color;
@@ -125,6 +162,21 @@ sealed class AntiLandmine : IDisposable
                 shown = true;
             }
         }
+    }
+
+    void UpdateMerchant(bool seen, ref long seenAt)
+    {
+        if (!config.MerchantOnly) seen = true;
+        if (seen) seenAt = Now();
+        bool open = seen || (seenAt != 0 && Now() - seenAt < Ms(MerchantGoneMs));
+        lock (gate)
+        {
+            if (open == merchantOpen) return;
+            merchantOpen = open;
+            verdict = Verdict.None;
+            if (open) reference = null; // a new window: a new series
+        }
+        Log.Write(open ? "merchant window open" : "merchant window closed");
     }
 
     // Called under gate.
@@ -206,10 +258,9 @@ sealed class AntiLandmine : IDisposable
 
     bool Block()
     {
-        Rectangle game;
-        if (!Native.TryGetForegroundGame(out game)) return false;
         lock (gate)
         {
+            if (!merchantOpen) return false;
             if (verdict == Verdict.None || verdictAt != Cursor.Position) return true; // price not read yet
             switch (verdict)
             {

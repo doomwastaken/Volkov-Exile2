@@ -17,11 +17,14 @@ Divine Orb = 650
 MaxRatio = 3
 ; 1 = save screenshots where no price was found (debug folder next to the exe), to report misses.
 SaveMisses = 0
+; 1 = act only while a merchant window is detected (experimental: other players' merchant windows are not detected yet).
+MerchantOnly = 0
 ";
 
     public readonly Dictionary<string, double> Rates = new Dictionary<string, double>();
     public double MaxRatio = 3;
     public bool SaveMisses;
+    public bool MerchantOnly;
 
     public static string Path { get { return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VolkovExile.ini"); } }
 
@@ -47,6 +50,7 @@ SaveMisses = 0
             double value;
             if (!double.TryParse(line.Substring(eq + 1).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value)) continue;
             if (key.Equals("SaveMisses", StringComparison.OrdinalIgnoreCase)) c.SaveMisses = value != 0;
+            else if (key.Equals("MerchantOnly", StringComparison.OrdinalIgnoreCase)) c.MerchantOnly = value != 0;
             else if (value <= 0) continue;
             else if (key.Equals("MaxRatio", StringComparison.OrdinalIgnoreCase)) c.MaxRatio = value;
             else c.Rates[Normalize(key)] = value;

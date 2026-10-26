@@ -185,11 +185,54 @@ tools/                  icon generator, test image helpers
 
 ## Roadmap
 
+Scope: small, single-purpose helpers that read the screen and at most *drop* the player's own clicks.
+No input automation, no memory reading, no full-screen overlay suite (trade search, build planner, etc.).
+
+### Anti-landmine (F9)
+- [ ] **Act only while a merchant window is open** (in progress, `MerchantOnly` in the ini, off by default).
+      Detects the title of your own shop's window; another player's merchant window (different gold plate,
+      `samples/landmine_3.png`, `_5.png`) is not matched yet — needs a second template or a looser match.
+      Goal: F9 stays on, Ctrl+click in the stash/inventory is never delayed, each window opening starts a new
+      series with a new reference.
+- [ ] Per-currency ratios (e.g. chaos ×10, exalted ×100, divine ×2) instead of one `MaxRatio`.
+- [ ] Tablets: block "N uses remaining" below 10 (except uniques).
+- [ ] Optional: copy a search regex for the hovered item to the clipboard on a separate hotkey only
+      (never overwrite the clipboard on its own).
+
+### Testing and feedback
+- [ ] Test on other resolutions with real screenshots: 1080p, 1440p, 2160p, ultrawide / non-16:9.
+      Each feature has a `wm_test.exe` mode; collect a sample set per resolution in `samples/<res>/`.
+- [ ] Screenshot tool for feedback: a hotkey that saves the game frame plus the current detector state
+      (what was read, verdict, timings) to `debug/`, so a friend can send "it didn't work here" in one file.
+      Generalizes the anti-landmine `SaveMisses` option to every feature.
+- [ ] Regression script: run every `samples/` image through its test mode and compare with expected results.
+
+### Settings
+- [ ] One `VolkovExile.ini` with a section per feature:
+      `[General]` hotkeys, sound volume, log on/off; `[Waystone]` auto-off delay; `[CraftLock]` auto-off delay,
+      frame thickness; `[AntiLandmine]` rates, ratios, merchant-only, save misses.
+- [ ] Reload the ini on change (or from the tray menu) without restarting.
+- [ ] Tray menu: toggles for each feature, "Open settings", "Open log", "Open debug folder".
+
+### Look and sound
+- [ ] Indicators: one small status strip (F7/F8/F9 on/off) at a screen edge, hidden when the game isn't focused.
+- [ ] Fancier frames and labels: rounded/gradient borders in the game's gold style, pulsing on a match,
+      icons (orb, waystone, landmine) next to the text.
+- [ ] Better sounds: distinct short sounds per event (match, blocked purchase, reference set), volume in the ini,
+      optional custom WAV files next to the exe.
+
+### Waystones / crafting
 - [x] Auto-off for the craft lock when the currency tab is closed.
-- [ ] Anti-landmine: per-currency ratios; tablet "uses remaining" check.
 - [ ] Auto-off for the waystone overlay when no waystone was seen for a while (or the stash is closed).
 - [ ] Magic (blue-header) waystones.
-- [ ] Verify on 1080p and other resolutions with real screenshots; non-16:9 aspect ratios.
-- [ ] Settings file: hotkeys, volume, auto-off delay.
 - [ ] Craft slot position for non-default UI layouts (it is fixed at the 1440p reference now).
 - [ ] Faster waystone counting: replace OCR with templates for the two two-line mods (~25 ms less).
+
+### Ideas (same spirit: small, passive or click-guarding)
+- [ ] Waystone filter: highlight waystones in a stash tab that match wanted mods / reject bad ones
+      (e.g. "monsters reflect", "no regeneration"), with a list in the ini.
+- [ ] Tablet / waystone "keep or vendor" verdict label on hover, from rules in the ini.
+- [ ] Craft lock for other benches (e.g. the reforging bench) using the same highlight-and-block logic.
+- [ ] Sell guard: warn when Ctrl+clicking a unique/high-tier item into the vendor window.
+- [ ] Session counters in the log/tray: rolls used per craft, waystones checked, purchases made.
+- [ ] Low-priority: a "panic off" hotkey that disables every feature and unhooks the mouse at once.

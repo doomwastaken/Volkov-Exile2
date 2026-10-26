@@ -18,6 +18,7 @@ static class Program
 
         if (args.Length == 2 && args[0] == "--test") { Test(new Analyzer(template), args[1]); return; }
         if (args.Length == 2 && args[0] == "--slot") { TestSlot(args[1]); return; }
+        if (args.Length == 2 && args[0] == "--merchant") { TestMerchant(args[1]); return; }
         if (args.Length >= 2 && args[0] == "--price") { TestPrice(args[1], args.Skip(2).Select(int.Parse).ToArray()); return; }
 
         bool created;
@@ -51,6 +52,19 @@ static class Program
             for (int y = 0; y < a.Height; y++) Array.Copy(p, (a.Y + y) * b.Width + a.X, crop, y * a.Width, a.Width);
             long fp = SlotDetector.RollFingerprint(crop, a.Width, a.Height);
             Console.WriteLine("{0}: present={1} highlighted={2} roll={3:X16} ({4:F3} ms)", path, present, lit, fp, sw.Elapsed.TotalMilliseconds);
+        }
+    }
+
+    static void TestMerchant(string path)
+    {
+        using (var b = new Bitmap(path))
+        {
+            var p = LoadPixels(b);
+            var d = new MerchantDetector(AntiLandmine.LoadTemplate());
+            d.Find(p, b.Width, b.Height, b.Height); // scales the template once
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            bool found = d.Find(p, b.Width, b.Height, b.Height);
+            Console.WriteLine("{0}: merchant={1} best {2:F2} at {4} ink {5:F2} plate {6:F2} ({3} ms)", path, found, d.BestScore, sw.ElapsedMilliseconds, d.BestAt, d.BestInk, d.BestPlate);
         }
     }
 

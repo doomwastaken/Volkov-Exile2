@@ -6,8 +6,8 @@ set M=%WINDIR%\System32\WinMetadata
 set REFS=-r:System.Drawing.dll -r:System.Windows.Forms.dll -r:"%F%\System.Runtime.dll" -r:"%F%\System.Runtime.WindowsRuntime.dll" ^
  -r:"%M%\Windows.Foundation.winmd" -r:"%M%\Windows.Media.winmd" -r:"%M%\Windows.Graphics.winmd" ^
  -r:"%M%\Windows.Globalization.winmd" -r:"%M%\Windows.Storage.winmd" -r:"%M%\Windows.Security.winmd"
-set RES=-resource:ws_tpl.png,ws_tpl.png -resource:volkov.ico,volkov.ico -resource:divine.wav,divine.wav
-set SRC=Program.cs Analyzer.cs SlotDetector.cs CraftLock.cs ScreenGrab.cs Log.cs WaystoneOverlay.cs PriceReader.cs AntiLandmine.cs Config.cs
+set RES=-resource:ws_tpl.png,ws_tpl.png -resource:volkov.ico,volkov.ico -resource:divine.wav,divine.wav -resource:merchant_tpl.png,merchant_tpl.png
+set SRC=Program.cs Analyzer.cs SlotDetector.cs CraftLock.cs ScreenGrab.cs Log.cs WaystoneOverlay.cs PriceReader.cs AntiLandmine.cs Config.cs MerchantDetector.cs
 
 if not exist "%~dp0dist" mkdir "%~dp0dist"
 pushd "%~dp0src"
