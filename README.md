@@ -180,7 +180,6 @@ tools/                  icon generator, test image helpers
 ## Roadmap
 
 - [x] Auto-off for the craft lock when the currency tab is closed.
-- [ ] Anti-landmine: digit templates for 4, 8, 9 (now such amounts read as unknown and are blocked).
 - [ ] Anti-landmine: per-currency ratios; tablet "uses remaining" check.
 - [ ] Auto-off for the waystone overlay when no waystone was seen for a while (or the stash is closed).
 - [ ] Magic (blue-header) waystones.
