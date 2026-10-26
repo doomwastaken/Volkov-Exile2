@@ -133,8 +133,9 @@ sealed class OverlayApp : ApplicationContext
 
     void UpdateTray()
     {
-        tray.Text = AppName + "\nMods (F8): " + (waystones.Enabled ? "ON" : "OFF") + "\nCraft lock (F7): " + (craftLock.Enabled ? "ON" : "OFF")
-            + "\nAnti-landmine (F9): " + (landmine.Enabled ? "ON" : "OFF");
+        // NotifyIcon.Text is limited to 63 characters.
+        tray.Text = AppName + "\nF7 craft lock: " + (craftLock.Enabled ? "ON" : "OFF") + "\nF8 mods: " + (waystones.Enabled ? "ON" : "OFF")
+            + "\nF9 landmine: " + (landmine.Enabled ? "ON" : "OFF");
     }
 
     protected override void ExitThreadCore()
