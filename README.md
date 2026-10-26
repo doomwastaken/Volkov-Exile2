@@ -63,8 +63,13 @@ in a more expensive currency or with an extra zero.
    (gold label); that first Ctrl+click is blocked so you see the reference before buying.
 2. Ctrl+click as usual. Each hovered item's price is read first (clicks before that are dropped):
    - green label — at most `MaxRatio` × the reference, the click goes through;
-   - red label + sound — more expensive, a currency not in the ini, or an unreadable amount: blocked.
+   - red label — more expensive, a currency not in the ini, or an unreadable amount: the click is blocked
+     with a warning sound.
+   - the label's second line always shows the reference and the allowed ratio.
 3. F9 twice resets the reference.
+
+Missed a price? Set `SaveMisses = 1` in the ini: frames where no price was found are saved to `debug\`
+next to the exe (up to 30 per F9 session) — send them to improve detection.
 
 Currencies are compared via `VolkovExile.ini` next to the exe (created on first F9):
 
@@ -74,6 +79,7 @@ Exalted Orb = 1
 Chaos Orb = 65
 Divine Orb = 650
 MaxRatio = 3
+SaveMisses = 0
 ```
 
 ### Log

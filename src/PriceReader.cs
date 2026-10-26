@@ -79,12 +79,16 @@ sealed class PriceReader
             }
             int h = (int)Math.Round(bottom - top);
             if (h < 6) continue;
-            // OCR boxes can be off by most of a line; take the text rows from the pixels of the name.
-            int nx = x0 + (int)left, ny0 = y0 + (int)top - h, ny1 = y0 + (int)bottom + h;
-            if (!TextRows(p, w, nx, nx + h * 3, Math.Max(y0, ny0), Math.Min(y0 + bh, ny1), out ny0, out ny1)) continue;
-            top = ny0 - y0; h = ny1 - ny0;
-            if (DumpGlyphs) Console.WriteLine(" line '{0}' left {1} top {2} h {3}", line.Text, x0 + (int)left, y0 + (int)top, h);
-            long amount = AmountLeftOf(p, w, x0 + (int)left, y0 + (int)top, h, x0);
+            // OCR boxes can be off by a line or more; try the text rows found in the pixels near the box,
+            // nearest first, until one has an amount left of the name.
+            int nx = x0 + (int)left;
+            long amount = 0;
+            foreach (var rows in TextRows(p, w, nx, nx + h * 3, Math.Max(y0, y0 + (int)top - 2 * h), Math.Min(y0 + bh, y0 + (int)bottom + 2 * h)))
+            {
+                if (DumpGlyphs) Console.WriteLine(" line '{0}' left {1} rows {2}-{3}", line.Text, nx, rows.Key, rows.Value);
+                amount = AmountLeftOf(p, w, nx, rows.Key, rows.Value - rows.Key, x0);
+                if (amount != 0) break;
+            }
             if (amount == 0) continue;
             if (amount < 0) amount = 0;
             var currency = string.Join(" ", name.Select(wd => wd.Text)).ToUpperInvariant();
@@ -93,12 +97,12 @@ sealed class PriceReader
         return null;
     }
 
-    // The run of rows with ink between x0 and x1 that is closest to the middle of y0..y1.
-    static bool TextRows(int[] p, int w, int x0, int x1, int y0, int y1, out int top, out int bottom)
+    // Runs of rows (top, bottom) with ink between x0 and x1, nearest to the middle of y0..y1 first.
+    static List<KeyValuePair<int, int>> TextRows(int[] p, int w, int x0, int x1, int y0, int y1)
     {
-        top = bottom = 0;
+        var runs = new List<KeyValuePair<int, int>>();
         x1 = Math.Min(x1, w);
-        int start = -1, best = int.MaxValue, mid = (y0 + y1) / 2;
+        int start = -1, mid = (y0 + y1) / 2;
         for (int y = y0; y <= y1; y++)
         {
             bool ink = false;
@@ -106,12 +110,11 @@ sealed class PriceReader
             if (ink && start < 0) start = y;
             else if (!ink && start >= 0)
             {
-                int dist = mid < start ? start - mid : mid >= y ? mid - y + 1 : 0;
-                if (y - start >= 6 && dist < best) { best = dist; top = start; bottom = y; }
+                if (y - start >= 6) runs.Add(new KeyValuePair<int, int>(start, y));
                 start = -1;
             }
         }
-        return best != int.MaxValue;
+        return runs.OrderBy(r => mid < r.Key ? r.Key - mid : mid >= r.Value ? mid - r.Value + 1 : 0).ToList();
     }
 
     // Glyphs of the amount sit left of the currency icon, in the band of the currency name's text.

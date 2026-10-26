@@ -15,6 +15,7 @@ sealed class AntiLandmine : IDisposable
     const int WM_LBUTTONDOWN = 0x0201, WM_LBUTTONUP = 0x0202;
     const int SettleMs = 50;          // cursor still this long before reading: the tooltip is drawn
     const int AfterClickMs = 150;     // after a purchase the item under the cursor changes; read again after this
+    const int MaxSavedMisses = 30;
 
     enum Verdict { None, Reference, Ok, Landmine, Unreadable }
 
@@ -35,6 +36,7 @@ sealed class AntiLandmine : IDisposable
     long readAfter;           // timestamp before which the worker must not read (cursor settling, after a click)
     Price reference;
     bool swallowUp;
+    int savedMisses;
 
     public bool Enabled { get; private set; }
 
@@ -53,6 +55,7 @@ sealed class AntiLandmine : IDisposable
         {
             config = Config.Load();
             lock (gate) { verdict = Verdict.None; reference = null; swallowUp = false; }
+            savedMisses = 0;
             hook = Native.SetWindowsHookEx(14 /* WH_MOUSE_LL */, hookProc, Native.GetModuleHandle(null), 0);
             running = true;
             worker = new Thread(Run) { IsBackground = true, Name = "anti-landmine" };
@@ -107,18 +110,17 @@ sealed class AntiLandmine : IDisposable
                 double ms = (Now() - t0) * 1000.0 / Stopwatch.Frequency;
                 if (Cursor.Position != pos) continue; // moved while reading: the result may belong to another item
 
-                string text; Color color; bool warn = false;
+                string text; Color color;
                 lock (gate)
                 {
                     verdict = Judge(price);
                     verdictAt = pos;
                     if (verdict == Verdict.Reference) reference = price;
-                    warn = verdict == Verdict.Landmine || verdict == Verdict.Unreadable;
                     text = Describe(price);
                     color = verdict == Verdict.Ok ? Color.LimeGreen : verdict == Verdict.Reference ? Color.Gold : verdict == Verdict.None ? Color.Gray : Color.Red;
                 }
                 Log.Write("price {0} -> {1} ({2:F0} ms)", price == null ? "none" : price.ToString(), verdict, ms);
-                if (warn) SystemSounds.Exclamation.Play();
+                if (price == null && config.SaveMisses && savedMisses < MaxSavedMisses) SaveMiss(grab);
                 Show(pos, text, color);
                 shown = true;
             }
@@ -136,16 +138,38 @@ sealed class AntiLandmine : IDisposable
         return price.Amount * rate > refValue * config.MaxRatio ? Verdict.Landmine : Verdict.Ok;
     }
 
+    // Called under gate. The second line always shows the reference so a wrong one is easy to spot.
     string Describe(Price price)
     {
         string p = price == null ? "no price" : price.ToString();
+        string limit = reference == null ? "" : "\nreference " + reference + ", up to " + config.MaxRatio + "x";
         switch (verdict)
         {
-            case Verdict.Reference: return "reference: " + p + " (click again to buy)";
-            case Verdict.Landmine: return "BLOCKED " + p + "  (reference " + reference + ")";
-            case Verdict.Unreadable: return "BLOCKED " + p + (price.Amount <= 0 ? "  (amount unreadable)" : "  (currency not in VolkovExile.ini)");
-            default: return price == null ? "no price" : p;
+            case Verdict.Reference: return "reference: " + p + "\nclick again to buy";
+            case Verdict.Landmine: return "LANDMINE " + p + limit;
+            case Verdict.Unreadable: return "BLOCKED " + p + (price.Amount <= 0 ? " (amount unreadable)" : " (currency not in ini)") + limit;
+            default: return p + limit;
         }
+    }
+
+    void SaveMiss(ScreenGrab grab)
+    {
+        try
+        {
+            var dir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "debug");
+            System.IO.Directory.CreateDirectory(dir);
+            using (var bmp = new Bitmap(grab.Width, grab.Height, System.Drawing.Imaging.PixelFormat.Format32bppRgb))
+            {
+                var d = bmp.LockBits(new Rectangle(0, 0, grab.Width, grab.Height), System.Drawing.Imaging.ImageLockMode.WriteOnly, bmp.PixelFormat);
+                System.Runtime.InteropServices.Marshal.Copy(grab.Pixels, 0, d.Scan0, grab.Pixels.Length);
+                bmp.UnlockBits(d);
+                var file = System.IO.Path.Combine(dir, "miss_" + DateTime.Now.ToString("HHmmss_fff") + ".png");
+                bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+                Log.Write("saved {0}", file);
+            }
+            savedMisses++;
+        }
+        catch (Exception e) { Log.Write("saving miss failed: {0}", e.Message); }
     }
 
     void Show(Point cursor, string text, Color color)
@@ -196,6 +220,7 @@ sealed class AntiLandmine : IDisposable
                 case Verdict.Landmine:
                 case Verdict.Unreadable:
                     Log.Write("click blocked: {0}", verdict);
+                    SystemSounds.Exclamation.Play();
                     return true;
             }
             // Bought: the item under the cursor changes, read it again.

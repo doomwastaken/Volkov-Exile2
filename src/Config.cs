@@ -15,10 +15,13 @@ Chaos Orb = 65
 Divine Orb = 650
 ; Block a purchase that costs more than this many times the reference item.
 MaxRatio = 3
+; 1 = save screenshots where no price was found (debug folder next to the exe), to report misses.
+SaveMisses = 0
 ";
 
     public readonly Dictionary<string, double> Rates = new Dictionary<string, double>();
     public double MaxRatio = 3;
+    public bool SaveMisses;
 
     public static string Path { get { return System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "VolkovExile.ini"); } }
 
@@ -42,11 +45,13 @@ MaxRatio = 3
             if (eq <= 0) continue;
             string key = line.Substring(0, eq).Trim();
             double value;
-            if (!double.TryParse(line.Substring(eq + 1).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value) || value <= 0) continue;
-            if (key.Equals("MaxRatio", StringComparison.OrdinalIgnoreCase)) c.MaxRatio = value;
+            if (!double.TryParse(line.Substring(eq + 1).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value)) continue;
+            if (key.Equals("SaveMisses", StringComparison.OrdinalIgnoreCase)) c.SaveMisses = value != 0;
+            else if (value <= 0) continue;
+            else if (key.Equals("MaxRatio", StringComparison.OrdinalIgnoreCase)) c.MaxRatio = value;
             else c.Rates[Normalize(key)] = value;
         }
-        Log.Write("config: {0}, max ratio {1}", string.Join(", ", c.Rates.Select(r => r.Key + "=" + r.Value)), c.MaxRatio);
+        Log.Write("config: {0}, max ratio {1}, save misses {2}", string.Join(", ", c.Rates.Select(r => r.Key + "=" + r.Value)), c.MaxRatio, c.SaveMisses);
         return c;
     }
 
