@@ -54,6 +54,28 @@ Holding **Alt** (detailed tooltip) pauses it.
 The lock turns itself off when the craft slot has been off screen for 5 s (currency tab closed), so it doesn't
 keep running if you forget it. Press F7 again to re-arm.
 
+### F9 — anti-landmine (merchant purchases)
+
+Protects Ctrl+click purchases in a merchant's shop from "landmines": one item among many similar ones priced
+in a more expensive currency or with an extra zero.
+
+1. Press **F9**, hold **Ctrl** and hover the first item of the series. Its price becomes the **reference**
+   (gold label); that first Ctrl+click is blocked so you see the reference before buying.
+2. Ctrl+click as usual. Each hovered item's price is read first (clicks before that are dropped):
+   - green label — at most `MaxRatio` × the reference, the click goes through;
+   - red label + sound — more expensive, a currency not in the ini, or an unreadable amount: blocked.
+3. F9 twice resets the reference.
+
+Currencies are compared via `VolkovExile.ini` next to the exe (created on first F9):
+
+```ini
+[AntiLandmine]
+Exalted Orb = 1
+Chaos Orb = 65
+Divine Orb = 650
+MaxRatio = 3
+```
+
 ### Log
 
 `VolkovExile.log` next to the exe, one line per event, flushed immediately. Watch it live:
@@ -100,6 +122,7 @@ Detection runs on saved screenshots in `samples/` (2560×1440, plus `craft_1080.
 ```bat
 tools\wm_test.exe --test samples\rare_crit.png     :: waystone: mod count
 tools\wm_test.exe --slot samples\craft_mod.png     :: craft slot: present / highlighted / roll fingerprint
+tools\wm_test.exe --price samples\landmine_4.png   :: merchant price in the tooltip (16x EXALTED ORB)
 ```
 
 Expected: every `rare_*.png` → 6 mods; `craft_mod.png` → highlighted, other `craft_*.png` → not;
@@ -124,6 +147,10 @@ tools/                  icon generator, test image helpers
 ```
 
 ## Changelog
+
+### 0.6 (anti-landmine branch)
+- F9 anti-landmine: reads the merchant price under the cursor, blocks Ctrl+click on landmines.
+- `VolkovExile.ini` with currency rates and the ratio.
 
 ### 0.5
 - Craft lock turns itself off when the currency tab is closed (slot off screen 5 s).
@@ -153,6 +180,8 @@ tools/                  icon generator, test image helpers
 ## Roadmap
 
 - [x] Auto-off for the craft lock when the currency tab is closed.
+- [ ] Anti-landmine: digit templates for 4, 8, 9 (now such amounts read as unknown and are blocked).
+- [ ] Anti-landmine: per-currency ratios; tablet "uses remaining" check.
 - [ ] Auto-off for the waystone overlay when no waystone was seen for a while (or the stash is closed).
 - [ ] Magic (blue-header) waystones.
 - [ ] Verify on 1080p and other resolutions with real screenshots; non-16:9 aspect ratios.

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
@@ -17,6 +18,7 @@ static class Program
 
         if (args.Length == 2 && args[0] == "--test") { Test(new Analyzer(template), args[1]); return; }
         if (args.Length == 2 && args[0] == "--slot") { TestSlot(args[1]); return; }
+        if (args.Length >= 2 && args[0] == "--price") { TestPrice(args[1], args.Skip(2).Select(int.Parse).ToArray()); return; }
 
         bool created;
         using (new System.Threading.Mutex(true, "VolkovExile.SingleInstance", out created))
@@ -52,6 +54,21 @@ static class Program
         }
     }
 
+    // --price file [x y w h]: OCR the whole image or the given area.
+    static void TestPrice(string path, int[] area)
+    {
+        using (var b = new Bitmap(path))
+        {
+            var p = LoadPixels(b);
+            var reader = new PriceReader();
+            var r = area.Length == 4 ? new Rectangle(area[0], area[1], area[2], area[3]) : new Rectangle(0, 0, b.Width, b.Height);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var price = reader.Read(p, b.Width, r.X, r.Y, r.Width, r.Height, false);
+            Console.WriteLine("{0}: {1} ({2} ms)", path, price == null ? "no price" : price.ToString(), sw.ElapsedMilliseconds);
+            if (Environment.GetEnvironmentVariable("WM_DEBUG") != null) Console.WriteLine(reader.LastText);
+        }
+    }
+
     static void Test(Analyzer analyzer, string path)
     {
         using (var b = new Bitmap(path))
@@ -75,12 +92,13 @@ static class Program
 sealed class OverlayApp : ApplicationContext
 {
     const string AppName = "VolkovExile";
-    const int WaystoneHotkeyId = 1, CraftHotkeyId = 2;
+    const int WaystoneHotkeyId = 1, CraftHotkeyId = 2, LandmineHotkeyId = 4; // 3 is Shift+F7
 
     readonly HotkeyWindow hotkeys;
     readonly NotifyIcon tray;
     readonly WaystoneOverlay waystones;
     readonly CraftLock craftLock = new CraftLock();
+    readonly AntiLandmine landmine = new AntiLandmine();
 
     public OverlayApp(Bitmap template)
     {
@@ -89,7 +107,9 @@ sealed class OverlayApp : ApplicationContext
 
         hotkeys = new HotkeyWindow(id =>
         {
-            if (id == WaystoneHotkeyId) waystones.Toggle(); else craftLock.Toggle();
+            if (id == WaystoneHotkeyId) waystones.Toggle();
+            else if (id == LandmineHotkeyId) landmine.Toggle();
+            else craftLock.Toggle();
             UpdateTray();
         });
         if (!Native.RegisterHotKey(hotkeys.Handle, WaystoneHotkeyId, 0x4000 /* MOD_NOREPEAT */, (uint)Keys.F8))
@@ -98,6 +118,10 @@ sealed class OverlayApp : ApplicationContext
         if (!Native.RegisterHotKey(hotkeys.Handle, CraftHotkeyId, 0x4000, (uint)Keys.F7)
             | !Native.RegisterHotKey(hotkeys.Handle, CraftHotkeyId + 1, 0x4000 | 0x0004 /* MOD_SHIFT */, (uint)Keys.F7))
             MessageBox.Show("F7 is already taken by another program.", AppName);
+        // Ctrl is allowed so F9 still works while Ctrl is held for buying.
+        if (!Native.RegisterHotKey(hotkeys.Handle, LandmineHotkeyId, 0x4000, (uint)Keys.F9)
+            | !Native.RegisterHotKey(hotkeys.Handle, LandmineHotkeyId + 1, 0x4000 | 0x0002 /* MOD_CONTROL */, (uint)Keys.F9))
+            MessageBox.Show("F9 is already taken by another program.", AppName);
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Exit", null, (s, e) => ExitThread());
@@ -109,7 +133,8 @@ sealed class OverlayApp : ApplicationContext
 
     void UpdateTray()
     {
-        tray.Text = AppName + "\nMods (F8): " + (waystones.Enabled ? "ON" : "OFF") + "\nCraft lock (F7): " + (craftLock.Enabled ? "ON" : "OFF");
+        tray.Text = AppName + "\nMods (F8): " + (waystones.Enabled ? "ON" : "OFF") + "\nCraft lock (F7): " + (craftLock.Enabled ? "ON" : "OFF")
+            + "\nAnti-landmine (F9): " + (landmine.Enabled ? "ON" : "OFF");
     }
 
     protected override void ExitThreadCore()
@@ -117,8 +142,11 @@ sealed class OverlayApp : ApplicationContext
         Native.UnregisterHotKey(hotkeys.Handle, WaystoneHotkeyId);
         Native.UnregisterHotKey(hotkeys.Handle, CraftHotkeyId);
         Native.UnregisterHotKey(hotkeys.Handle, CraftHotkeyId + 1);
+        Native.UnregisterHotKey(hotkeys.Handle, LandmineHotkeyId);
+        Native.UnregisterHotKey(hotkeys.Handle, LandmineHotkeyId + 1);
         waystones.Dispose();
         craftLock.Dispose();
+        landmine.Dispose();
         tray.Visible = false; tray.Dispose();
         hotkeys.DestroyHandle();
         base.ExitThreadCore();
@@ -164,7 +192,8 @@ sealed class HotkeyWindow : NativeWindow
     public HotkeyWindow(Action<int> onHotkey) { this.onHotkey = onHotkey; CreateHandle(new CreateParams()); }
     protected override void WndProc(ref Message m)
     {
-        if (m.Msg == 0x0312 /* WM_HOTKEY */) onHotkey(Math.Min(m.WParam.ToInt32(), 2));
+        // Hotkeys registered twice (plain and with a modifier) share the action of the first id.
+        if (m.Msg == 0x0312 /* WM_HOTKEY */) { int id = m.WParam.ToInt32(); onHotkey(id == 3 ? 2 : id == 5 ? 4 : id); }
         base.WndProc(ref m);
     }
 }
