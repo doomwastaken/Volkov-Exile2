@@ -66,10 +66,13 @@ sealed class PriceReader
 
         foreach (var line in lines)
         {
-            // The currency name: the words from the first one made of 3+ letters.
+            // The currency name: the trailing words made only of letters. OCR often merges the amount and the
+            // icon into junk words before it ("sOX f}", "3SOX"); a letters-only word ending in x is such junk.
             var words = line.Words.ToList();
-            int first = words.FindIndex(wd => wd.Text.Count(char.IsLetter) >= 3);
-            if (first < 0) continue;
+            int first = words.Count;
+            while (first > 0 && words[first - 1].Text.All(ch => char.IsLetter(ch) || ch == '\'')) first--;
+            while (first < words.Count && char.ToUpperInvariant(words[first].Text[words[first].Text.Length - 1]) == 'X') first++;
+            if (first == words.Count || words.Skip(first).Sum(wd => wd.Text.Length) < 4) continue;
             var name = words.Skip(first).ToList();
             double left = name[0].BoundingRect.X / k, top = double.MaxValue, bottom = 0;
             foreach (OcrWord wd in name)
